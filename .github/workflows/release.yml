@@ -21,7 +21,7 @@ jobs:
       - name: Build
         run: |
           go mod tidy
-          go build -o myapp
+          go build -o postman-to-readme
 
       - name: Get current date
         id: date
@@ -44,6 +44,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./myapp
-          asset_name: myapp-${{ env.CURRENT_DATE }}
+          asset_path: ./postman-to-readme
+          asset_name: postman-to-readme-${{ env.CURRENT_DATE }}
           asset_content_type: application/octet-stream
