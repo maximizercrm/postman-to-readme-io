@@ -12,6 +12,8 @@ This script is used to convert the Postman collection to the readme.io documenta
 3. The script will compare the `README_API_CREATED_PAGES_FILE` and the list of the slugs of the created/updated pages in the readme.io at the previous step. All slugs listed in the `README_API_CREATED_PAGES_FILE` but not in the list of the created/updated pages will be deleted from the readme.io developer portal.
 4. The script will update the `README_API_CREATED_PAGES_FILE` with the list of the created/updated pages in the readme.io developer portal.
 
+NOTE: The script does not update the visibility of the existing pages in the readme.io developer portal.
+
 ## How to use
 
 1. Download the binary from the [releases](https://github.com/maximizercrm/postman-to-readme-io/releases)
