@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,14 +17,20 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Build
-        run: go build -o postman-to-readme
+      - name: Build for Windows
+        run: GOOS=windows GOARCH=amd64 go build -o postman-to-readme-windows-amd64.exe
+
+      - name: Build for macOS
+        run: GOOS=darwin GOARCH=amd64 go build -o postman-to-readme-darwin-amd64
+
+      - name: Build for Linux
+        run: GOOS=linux GOARCH=amd64 go build -o postman-to-readme-linux-amd64
 
       - name: Get current date
         id: date
         run: echo "CURRENT_DATE=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
-      - name: Create Release
+      - name: Create a release
         id: create_release
         uses: actions/create-release@v1
         env:
@@ -36,12 +41,32 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset
+      - name: Upload Windows asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./postman-to-readme
-          asset_name: postman-to-readme-${{ env.CURRENT_DATE }}
+          asset_path: ./postman-to-readme-windows-amd64.exe
+          asset_name: postman-to-readme-windows-amd64.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload macOS asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./postman-to-readme-darwin-amd64
+          asset_name: postman-to-readme-darwin-amd64
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./postman-to-readme-linux-amd64
+          asset_name: postman-to-readme-linux-amd64
           asset_content_type: application/octet-stream
