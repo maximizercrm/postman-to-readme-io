@@ -14,6 +14,6 @@ This script is used to convert the Postman collection to the readme.io documenta
 
 ## How to use
 
-1. Download the binary from the [releases](/releases)
-2. Create a `.env` file based on the `.env.example` file in the same folder with the binary.
+1. Download the binary from the [releases](https://github.com/maximizercrm/postman-to-readme-io/releases)
+2. Create a `.env` file based on the [.env.example](/.env.example) file in the same folder with the binary.
 3. Run the binary 
