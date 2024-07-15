@@ -336,7 +336,7 @@ func processQuery(item Item, level string) string {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
 	url := strings.ReplaceAll(item.Request.URL.Raw, "{{BaseURL}}", "https://api.maximizer.com/octopus")
-	authHeaders := "`Authorization: Bearer <token>`"
+	authHeaders := "Authorization: Bearer <token>"
 	if item.Request.Auth.Type == "noauth" {
 		authHeaders = ""
 	}
