@@ -97,10 +97,13 @@ var configuration Configuration
 var pages Pages
 
 func main() {
-	// Load .env file
-	err := godotenv.Load()
-	if err != nil {
-		panic(fmt.Sprintf("Error loading .env file:", err))
+	// Attempt to load .env file if it exists
+	if _, err := os.Stat(".env"); err == nil {
+		if err := godotenv.Load(); err != nil {
+			panic(fmt.Sprintf("Error loading .env file: %s", err))
+		}
+	} else {
+		fmt.Println("No .env file found. Proceeding with environment variables or default values.")
 	}
 
 	sourceFile := os.Getenv("COLLECTION_SOURCE_FILE")
