@@ -21,6 +21,7 @@ type Configuration struct {
 	CategorySlug string
 	PageSlug     string
 	Version      string
+	BaseURL      string
 	Pages        PagesConfiguration
 }
 
@@ -125,6 +126,7 @@ func main() {
 	if configuration.PageSlug == "" {
 		panic(fmt.Sprintf("Error: README_API_PAGES_SLUG is required"))
 	}
+	configuration.BaseURL = os.Getenv("COLLECTION_BASE_URL")
 
 	var postmanCollection struct {
 		Item []Item `json:"item"`
@@ -335,7 +337,7 @@ func processQuery(item Item, level string) string {
 	if item.Request.Description != "" {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
-	url := strings.ReplaceAll(item.Request.URL.Raw, "{{BaseURL}}", "https://api.maximizer.com/octopus")
+	url := strings.ReplaceAll(item.Request.URL.Raw, "{{BaseURL}}", configuration.BaseURL)
 	authHeaders := "Authorization: Bearer <token>"
 	if item.Request.Auth.Type == "noauth" {
 		authHeaders = ""
