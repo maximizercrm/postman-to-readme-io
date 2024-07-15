@@ -69,7 +69,7 @@ type Item struct {
 
 type Request struct {
 	Method      string   `json:"method"`
-	URL         URL      `json:"url"`
+	URL         string   `json:"url"`
 	Body        Body     `json:"body"`
 	Header      []Header `json:"header"`
 	Description string   `json:"description,omitempty"`
@@ -78,10 +78,6 @@ type Request struct {
 
 type Auth struct {
 	Type string `json:"type,omitempty"`
-}
-
-type URL struct {
-	Raw string `json:"raw"`
 }
 
 type Body struct {
@@ -340,7 +336,7 @@ func processQuery(item Item, level string) string {
 	if item.Request.Description != "" {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
-	url := strings.ReplaceAll(item.Request.URL.Raw, "{{BaseURL}}", configuration.BaseURL)
+	url := strings.ReplaceAll(item.Request.URL, "{{BaseURL}}", configuration.BaseURL)
 	authHeaders := "Authorization: Bearer <token>"
 	if item.Request.Auth.Type == "noauth" {
 		authHeaders = ""
