@@ -286,7 +286,7 @@ func createRootPage(item Item, destinationFolder string) {
 			content += processQuery(subItem, "#")
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
-			subFolderLink := fmt.Sprintf("[%s](/docs/%s)\n\n", subItem.Name, subPageSlug)
+			subFolderLink := fmt.Sprintf("[%s](/docs/%s)\n", subItem.Name, subPageSlug)
 			content += fmt.Sprintf("- %s", subFolderLink)
 			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
 		}
