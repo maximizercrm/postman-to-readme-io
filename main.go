@@ -19,6 +19,7 @@ type Configuration struct {
 	ApiKey       string
 	Prefix       string
 	CategorySlug string
+	PageSlug     string
 	Version      string
 	Pages        PagesConfiguration
 }
@@ -118,6 +119,11 @@ func main() {
 	err = os.MkdirAll(configuration.Pages.MarkdownFolder, os.ModePerm)
 	if err != nil {
 		panic(fmt.Sprintf("Error creating docs directory:", err))
+	}
+
+	configuration.PageSlug = os.Getenv("README_API_PAGES_SLUG")
+	if configuration.PageSlug == "" {
+		panic(fmt.Sprintf("Error: README_API_PAGES_SLUG is required"))
 	}
 
 	var postmanCollection struct {
@@ -286,7 +292,7 @@ func createRootPage(item Item, destinationFolder string) {
 			content += processQuery(subItem, "#")
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
-			subFolderLink := fmt.Sprintf("[%s](/docs/%s)\n", subItem.Name, subPageSlug)
+			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", subItem.Name, configuration.PageSlug, subPageSlug)
 			content += fmt.Sprintf("- %s", subFolderLink)
 			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
 		}
