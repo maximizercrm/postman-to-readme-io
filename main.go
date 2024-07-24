@@ -294,20 +294,33 @@ func createRootPage(item Item, destinationFolder string) {
 		description = fmt.Sprintf("\n%s\n\n", cleanString(item.Description))
 	}
 
+	hasContent := false
 	content := header + description + "\n"
 	if len(item.Item) == 0 {
 		content += processQuery(item, "")
+		hasContent = true
 	}
 
+	hasList := false
+	listContent := ""
 	for _, subItem := range item.Item {
 		if len(subItem.Item) == 0 {
 			content += processQuery(subItem, "#")
+			hasContent = true
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
 			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", subItem.Name, configuration.PageSlug, subPageSlug)
-			content += fmt.Sprintf("- %s", subFolderLink)
+			listContent += fmt.Sprintf("- %s", subFolderLink)
 			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
+			hasList = true
 		}
+	}
+	if hasList {
+		if hasContent {
+			content += "\n***\n"
+		}
+		content += fmt.Sprintf("\n# Subsections\n")
+		content += listContent
 	}
 
 	// Write content to file
