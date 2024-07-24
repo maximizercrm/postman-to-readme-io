@@ -128,6 +128,11 @@ func main() {
 	}
 	configuration.BaseURL = os.Getenv("COLLECTION_BASE_URL")
 
+	configuration.Prefix = os.Getenv("README_API_PREFIX")
+	if configuration.Prefix == "" {
+		panic(fmt.Sprintf("Error: README_API_PREFIX is required"))
+	}
+
 	var postmanCollection struct {
 		Item []Item `json:"item"`
 	}
@@ -150,11 +155,6 @@ func main() {
 	configuration.ApiKey = os.Getenv("README_API_KEY")
 	if configuration.ApiKey == "" {
 		fmt.Println("Markdown generated. Publish process stopped: README_API_KEY is empty")
-		return
-	}
-	configuration.Prefix = os.Getenv("README_API_PREFIX")
-	if configuration.Prefix == "" {
-		fmt.Println("Markdown generated. Publish process stopped: README_API_PREFIX is empty")
 		return
 	}
 	configuration.CategorySlug = os.Getenv("README_API_CATEGORY_SLUG")
@@ -290,11 +290,12 @@ func createRootPage(item Item, destinationFolder string) {
 	slug := fmt.Sprintf("%s-%s", configuration.Prefix, generateSlug(item.Name))
 	header := ""
 	description := ""
+	hasContent := false
 	if item.Description != "" {
 		description = fmt.Sprintf("\n%s\n\n", cleanString(item.Description))
+		hasContent = true
 	}
 
-	hasContent := false
 	content := header + description + "\n"
 	if len(item.Item) == 0 {
 		content += processQuery(item, "")
