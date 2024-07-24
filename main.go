@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -198,7 +199,7 @@ func main() {
 		itemsMap[item] = true
 	}
 
-	// Find items in array1 that do not exist in OldPages array
+	// Find items in OldPages that do not exist in NewPages array
 	var diff []string
 	for _, item := range configuration.Pages.OldPages {
 		if !itemsMap[item] {
@@ -206,14 +207,24 @@ func main() {
 		}
 	}
 
+	//Order the diff array in a reverse order to remove the child pages first
+	sort.Sort(sort.Reverse(sort.StringSlice(diff)))
+
 	// Delete pages that are not in the new list
+	var isDeleted = true
 	for _, item := range diff {
 		if deletePage(item) {
 			fmt.Printf("Delete the page %s\n", item)
+		} else {
+			isDeleted = false
 		}
 	}
 
 	updatePagesList(configuration.Pages.PagesFile, configuration.Pages.NewPages)
+
+	if !isDeleted {
+		panic(fmt.Sprintf("Error deleting pages"))
+	}
 }
 
 func updatePagesList(filepath string, lines []string) bool {
@@ -276,7 +287,7 @@ func loadPreviouslyCreatedPages(file string) []string {
 }
 
 func createRootPage(item Item, destinationFolder string) {
-	slug := fmt.Sprintf("octopus-postman-%s", generateSlug(item.Name))
+	slug := fmt.Sprintf("%s-%s", configuration.Prefix, generateSlug(item.Name))
 	header := ""
 	description := ""
 	if item.Description != "" {
