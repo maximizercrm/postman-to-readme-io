@@ -306,7 +306,7 @@ func createRootPage(item Item, destinationFolder string) {
 	listContent := ""
 	for _, subItem := range item.Item {
 		if len(subItem.Item) == 0 {
-			content += processQuery(subItem, "#")
+			content += fmt.Sprintf("\n%s", processQuery(subItem, "#"))
 			hasContent = true
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
@@ -378,7 +378,7 @@ func processQuery(item Item, level string) string {
 func processSubItem(item Item, level string) string {
 	content := ""
 	if item.Request.Method != "" {
-		content += processQuery(item, level)
+		content += fmt.Sprintf("\n%s", processQuery(item, level))
 	} else if len(item.Item) > 0 {
 		content += getHeader(level, item)
 		if item.Description != "" {
