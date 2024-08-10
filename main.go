@@ -329,7 +329,7 @@ func createRootPage(item Item, destinationFolder string) {
 
 	content := header + description + "\n"
 	if len(item.Item) == 0 {
-		content += processQuery(item, "")
+		content += processQuery(item)
 		hasContent = true
 	}
 
@@ -337,13 +337,13 @@ func createRootPage(item Item, destinationFolder string) {
 	listContent := ""
 	for _, subItem := range item.Item {
 		if len(subItem.Item) == 0 {
-			content += fmt.Sprintf("\n%s", processQuery(subItem, "#"))
+			content += fmt.Sprintf("\n%s", processQuery(subItem))
 			hasContent = true
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
 			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", subItem.Name, configuration.PageSlug, subPageSlug)
 			listContent += fmt.Sprintf("- %s", subFolderLink)
-			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
+			createSubPage(slug, subItem, subPageSlug, destinationFolder, "#")
 			hasList = true
 		}
 	}
@@ -387,8 +387,8 @@ func createSubPage(parentSlug string, item Item, slug string, destinationFolder 
 	})
 }
 
-func processQuery(item Item, level string) string {
-	content := getQueryHeader(item, level)
+func processQuery(item Item) string {
+	content := getQueryHeader(item)
 	if item.Request.Description != "" {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
@@ -415,7 +415,7 @@ func processQuery(item Item, level string) string {
 func processSubItem(item Item, level string) string {
 	content := ""
 	if item.Request.Method != "" {
-		content += fmt.Sprintf("\n%s", processQuery(item, level))
+		content += fmt.Sprintf("\n%s", processQuery(item))
 	} else if len(item.Item) > 0 {
 		content += getHeader(level, item)
 		if item.Description != "" {
@@ -531,11 +531,7 @@ func cleanString(str string) string {
 	return strings.Trim(str, " \n\t")
 }
 
-func getQueryHeader(item Item, level string) string {
-	if level == "#" {
-		return getHeader(level, item)
-	}
-
+func getQueryHeader(item Item) string {
 	return fmt.Sprintf("**%s**\n", cleanString(item.Name))
 }
 
