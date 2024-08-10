@@ -343,7 +343,7 @@ func createRootPage(item Item, destinationFolder string) {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
 			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", subItem.Name, configuration.PageSlug, subPageSlug)
 			listContent += fmt.Sprintf("- %s", subFolderLink)
-			createSubPage(slug, subItem, subPageSlug, destinationFolder, "#")
+			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
 			hasList = true
 		}
 	}
