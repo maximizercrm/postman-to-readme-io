@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/joho/godotenv"
 	"io"
@@ -70,11 +71,22 @@ type Item struct {
 
 type Request struct {
 	Method      string   `json:"method"`
-	URL         string   `json:"url"`
+	URL         RawURL   `json:"url"`
 	Body        Body     `json:"body"`
 	Header      []Header `json:"header"`
 	Description string   `json:"description,omitempty"`
 	Auth        Auth     `json:"auth,omitempty"`
+}
+
+// RawURL can hold either a URL string or a URL object with a "raw" property.
+type RawURL struct {
+	URLString string
+	URLObject *URLObject
+}
+
+// URLObject represents the structure of the URL when it's not a simple string.
+type URLObject struct {
+	Raw string `json:"raw"`
 }
 
 type Auth struct {
@@ -88,6 +100,25 @@ type Body struct {
 type Header struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+// UnmarshalJSON custom unmarshaler for RawURL to handle both string and object.
+func (r *RawURL) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as a string.
+	var urlString string
+	if err := json.Unmarshal(data, &urlString); err == nil {
+		r.URLString = urlString
+		return nil
+	}
+
+	// If not a string, try to unmarshal as an object.
+	var urlObject URLObject
+	if err := json.Unmarshal(data, &urlObject); err == nil {
+		r.URLObject = &urlObject
+		return nil
+	}
+
+	return errors.New("url field is neither a string nor a recognized object")
 }
 
 var configuration Configuration
@@ -361,7 +392,13 @@ func processQuery(item Item, level string) string {
 	if item.Request.Description != "" {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
-	url := strings.ReplaceAll(item.Request.URL, "{{BaseURL}}", configuration.BaseURL)
+	url := ""
+	if item.Request.URL.URLString != "" {
+		url = item.Request.URL.URLString
+	} else if item.Request.URL.URLObject != nil {
+		url = item.Request.URL.URLObject.Raw
+	}
+	url = strings.ReplaceAll(url, "{{BaseURL}}", configuration.BaseURL)
 	authHeaders := "Authorization: Bearer <token>"
 	if item.Request.Auth.Type == "noauth" {
 		authHeaders = ""

@@ -2,5 +2,5 @@
 *.exe
 tmp
 .idea
-postman-to-readme
+main
 .DS_Store
