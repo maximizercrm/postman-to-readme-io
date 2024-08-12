@@ -439,7 +439,7 @@ func getRequestHeaders(request Request) string {
 
 func processSubItem(item Item, level string) string {
 	content := ""
-	if item.Request.Method != "" {
+	if isQuery(item) {
 		content += fmt.Sprintf("\n%s", processQuery(item))
 	} else if len(item.Item) > 0 {
 		content += getHeader(level, item)
@@ -449,6 +449,8 @@ func processSubItem(item Item, level string) string {
 		for _, subitem := range item.Item {
 			content += processSubItem(subitem, fmt.Sprintf("%s#", level))
 		}
+	} else {
+		content += fmt.Sprintf("\n%s", item.Description)
 	}
 	return content
 }
