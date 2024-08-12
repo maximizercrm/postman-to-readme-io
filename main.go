@@ -406,8 +406,8 @@ func processQuery(item Item) string {
 	if len(item.Response) > 0 {
 		for _, response := range item.Response {
 			responseExamples += fmt.Sprintf("\n**Example: %s**\n", cleanString(response.Name))
-			responseExamples += fmt.Sprintf("\n```json js\n//Request:%s%s\n%s\n```\n", getRequestURL(response.Request), getRequestHeaders(response.Request), cleanString(response.Request.Body.Raw))
-			responseExamples += fmt.Sprintf("\n```json js\n// Response:\n%s\n```\n\n", cleanString(response.Body))
+			responseExamples += fmt.Sprintf("\n```json js\n// Request →%s%s\n%s\n```\n", getRequestURL(response.Request), getRequestHeaders(response.Request), cleanString(response.Request.Body.Raw))
+			responseExamples += fmt.Sprintf("\n```json js\n// Response ←\n%s\n```\n\n", cleanString(response.Body))
 		}
 	}
 	return content + requestExample + responseExamples
@@ -557,7 +557,7 @@ func cleanString(str string) string {
 }
 
 func getQueryHeader(item Item) string {
-	return fmt.Sprintf("**Request example: %s**\n", cleanString(item.Name))
+	return fmt.Sprintf("**%s**\n", cleanString(item.Name))
 }
 
 func getHeader(level string, item Item) string {
