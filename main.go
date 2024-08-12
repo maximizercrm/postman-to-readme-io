@@ -63,10 +63,11 @@ type Page struct {
 }
 
 type Item struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description,omitempty"`
-	Item        []Item  `json:"item,omitempty"`
-	Request     Request `json:"request,omitempty"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	Item        []Item     `json:"item,omitempty"`
+	Request     Request    `json:"request,omitempty"`
+	Response    []Response `json:"response,omitempty"`
 }
 
 type Request struct {
@@ -76,6 +77,12 @@ type Request struct {
 	Header      []Header `json:"header"`
 	Description string   `json:"description,omitempty"`
 	Auth        Auth     `json:"auth,omitempty"`
+}
+
+type Response struct {
+	Name    string  `json:"name"`
+	Body    string  `json:"body"`
+	Request Request `json:"originalRequest,omitempty"`
 }
 
 // RawURL can hold either a URL string or a URL object with a "raw" property.
@@ -328,7 +335,7 @@ func createRootPage(item Item, destinationFolder string) {
 	}
 
 	content := header + description + "\n"
-	if len(item.Item) == 0 {
+	if isQuery(item) {
 		content += processQuery(item)
 		hasContent = true
 	}
@@ -336,7 +343,7 @@ func createRootPage(item Item, destinationFolder string) {
 	hasList := false
 	listContent := ""
 	for _, subItem := range item.Item {
-		if len(subItem.Item) == 0 {
+		if isQuery(subItem) {
 			content += fmt.Sprintf("\n%s", processQuery(subItem))
 			hasContent = true
 		} else {
@@ -392,24 +399,42 @@ func processQuery(item Item) string {
 	if item.Request.Description != "" {
 		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
 	}
+	url := getRequestURL(item.Request)
+	headers := getRequestHeaders(item.Request)
+	requestExample := fmt.Sprintf("\n```json js%s%s\n%s\n```\n\n", url, headers, cleanString(item.Request.Body.Raw))
+	responseExamples := ""
+	if len(item.Response) > 0 {
+		for _, response := range item.Response {
+			responseExamples += fmt.Sprintf("\n**Example: %s**\n", cleanString(response.Name))
+			responseExamples += fmt.Sprintf("\n```json js\n//Request:%s%s\n%s\n```\n", getRequestURL(response.Request), getRequestHeaders(response.Request), cleanString(response.Request.Body.Raw))
+			responseExamples += fmt.Sprintf("\n```json js\n// Response:\n%s\n```\n\n", cleanString(response.Body))
+		}
+	}
+	return content + requestExample + responseExamples
+}
+
+func getRequestURL(request Request) string {
 	url := ""
-	if item.Request.URL.URLString != "" {
-		url = item.Request.URL.URLString
-	} else if item.Request.URL.URLObject != nil {
-		url = item.Request.URL.URLObject.Raw
+	if request.URL.URLString != "" {
+		url = request.URL.URLString
+	} else if request.URL.URLObject != nil {
+		url = request.URL.URLObject.Raw
 	}
 	url = strings.ReplaceAll(url, "{{BaseURL}}", configuration.BaseURL)
+	return fmt.Sprintf("\n// %s %s", request.Method, cleanString(url))
+}
+
+func getRequestHeaders(request Request) string {
 	authHeaders := "Authorization: Bearer <token>"
-	if item.Request.Auth.Type == "noauth" {
+	if request.Auth.Type == "noauth" {
 		authHeaders = ""
 	}
-	requestTo := fmt.Sprintf("\n// %s %s", item.Request.Method, cleanString(url))
+
 	headers := ""
 	if authHeaders != "" {
 		headers = fmt.Sprintf("\n// %s", authHeaders)
 	}
-	requestExample := fmt.Sprintf("\n```json js%s%s\n%s\n```\n\n", requestTo, headers, cleanString(item.Request.Body.Raw))
-	return content + requestExample
+	return headers
 }
 
 func processSubItem(item Item, level string) string {
@@ -532,7 +557,7 @@ func cleanString(str string) string {
 }
 
 func getQueryHeader(item Item) string {
-	return fmt.Sprintf("**%s**\n", cleanString(item.Name))
+	return fmt.Sprintf("**Request example: %s**\n", cleanString(item.Name))
 }
 
 func getHeader(level string, item Item) string {
@@ -542,4 +567,12 @@ func getHeader(level string, item Item) string {
 	}
 
 	return content
+}
+
+func isEmptyRequest(req Request) bool {
+	return req.Method == "" && req.URL == (RawURL{}) && req.Body == (Body{}) && len(req.Header) == 0 && req.Description == "" && req.Auth == (Auth{})
+}
+
+func isQuery(item Item) bool {
+	return len(item.Item) == 0 && !isEmptyRequest(item.Request)
 }
