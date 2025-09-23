@@ -632,12 +632,16 @@ func getCategoryURI(title string) string {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// Read body once to enable logging and parsing regardless of status code
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return ""
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
+	// Debug: log status code and response body from the GET request
+	fmt.Printf("getCategoryURI GET %s → %d\n%s\n", fullURL, resp.StatusCode, string(bodyBytes))
+
+	if resp.StatusCode != http.StatusOK {
 		return ""
 	}
 
