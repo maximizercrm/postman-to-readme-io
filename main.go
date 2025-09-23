@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -159,7 +158,7 @@ func main() {
 
 	sourceFile := os.Getenv("COLLECTION_SOURCE_FILE")
 	if sourceFile == "" {
-		panic(fmt.Sprintf("Error: COLLECTION_SOURCE_FILE is required"))
+		panic("Error: COLLECTION_SOURCE_FILE is required")
 	}
 	file, err := os.ReadFile(sourceFile)
 	if err != nil {
@@ -168,7 +167,7 @@ func main() {
 
 	configuration.Pages.MarkdownFolder = os.Getenv("MARKDOWN_FOLDER")
 	if configuration.Pages.MarkdownFolder == "" {
-		panic(fmt.Sprintf("Error: MARKDOWN_FOLDER is required"))
+		panic("Error: MARKDOWN_FOLDER is required")
 	}
 	// Create docs directory if not exists
 	err = os.MkdirAll(configuration.Pages.MarkdownFolder, os.ModePerm)
@@ -178,23 +177,23 @@ func main() {
 
 	configuration.Section = os.Getenv("README_API_SECTION")
 	if configuration.Section == "" {
-		panic(fmt.Sprintf("Error: README_API_SECTION is required"))
+		panic("Error: README_API_SECTION is required")
 	}
 	configuration.Section = strings.ToLower(strings.TrimSpace(configuration.Section))
 	if configuration.Section != "reference" && configuration.Section != "guides" {
-		panic(fmt.Sprintf("Error: README_API_SECTION must be 'reference' or 'guides'"))
+		panic("Error: README_API_SECTION must be 'reference' or 'guides'")
 	}
 
 	configuration.Title = os.Getenv("README_API_CATEGORY_TITLE")
 	if configuration.Title == "" {
-		panic(fmt.Sprintf("Error: README_API_CATEGORY_TITLE is required"))
+		panic("Error: README_API_CATEGORY_TITLE is required")
 	}
 
 	configuration.BaseURL = os.Getenv("COLLECTION_BASE_URL")
 
 	configuration.Prefix = os.Getenv("README_API_PREFIX")
 	if configuration.Prefix == "" {
-		panic(fmt.Sprintf("Error: README_API_PREFIX is required"))
+		panic("Error: README_API_PREFIX is required")
 	}
 
 	var postmanCollection struct {
@@ -289,7 +288,7 @@ func main() {
 	updatePagesList(configuration.Pages.PagesFile, configuration.Pages.NewPages)
 
 	if !isDeleted {
-		panic(fmt.Sprintf("Error deleting pages"))
+		panic("Error deleting pages")
 	}
 }
 
@@ -308,15 +307,14 @@ func updatePagesList(filepath string, lines []string) bool {
 	for _, line := range lines {
 		_, err := writer.WriteString(line + "\n")
 		if err != nil {
-			panic(fmt.Sprintf("Error writing to file:", err))
-			return true
+			panic(fmt.Sprintf("Error writing to file: %v", err))
 		}
 	}
 
 	// Flush the writer to ensure all data is written to the file
 	err = writer.Flush()
 	if err != nil {
-		panic(fmt.Sprintf("Error flushing writer:", err))
+		panic(fmt.Sprintf("Error flushing writer: %v", err))
 	}
 	return false
 }
@@ -324,8 +322,7 @@ func updatePagesList(filepath string, lines []string) bool {
 func loadPreviouslyCreatedPages(file string) []string {
 	createdPagesFile, err := os.Open(file)
 	if err != nil {
-		panic(fmt.Sprintf("Error opening file:", err))
-		return nil
+		panic(fmt.Sprintf("Error opening file: %v", err))
 	}
 	defer createdPagesFile.Close()
 
@@ -386,13 +383,13 @@ func createRootPage(item Item, destinationFolder string) {
 		if hasContent {
 			content += "\n***\n"
 		}
-		content += fmt.Sprintf("\n# Subsections\n")
+		content += "\n# Subsections\n"
 		content += listContent
 	}
 
 	// Write content to file
 	filename := fmt.Sprintf("%s/%s.md", destinationFolder, slug)
-	err := ioutil.WriteFile(filename, []byte(content), os.ModePerm)
+	err := os.WriteFile(filename, []byte(content), os.ModePerm)
 	if err != nil {
 		fmt.Println("Error writing file:", filename, err)
 	}
@@ -409,7 +406,7 @@ func createSubPage(parentSlug string, item Item, slug string, destinationFolder 
 
 	// Write content to file
 	filename := fmt.Sprintf("%s/%s.md", destinationFolder, slug)
-	err := ioutil.WriteFile(filename, []byte(content), os.ModePerm)
+	err := os.WriteFile(filename, []byte(content), os.ModePerm)
 	if err != nil {
 		fmt.Println("Error writing file:", filename, err)
 	}
