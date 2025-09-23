@@ -6,25 +6,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
+	"html"
 	"io"
-	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 type Configuration struct {
-	Endpoint     string
-	ApiKey       string
-	Prefix       string
-	CategorySlug string
-	PageSlug     string
-	Version      string
-	BaseURL      string
-	Pages        PagesConfiguration
+	Endpoint    string
+	ApiKey      string
+	Prefix      string
+	Section     string
+	Title       string
+	CategoryURI string
+	Branch      string
+	BaseURL     string
+	Pages       PagesConfiguration
 }
 
 type PagesConfiguration struct {
@@ -35,20 +38,32 @@ type PagesConfiguration struct {
 }
 
 type ReadmeIoPage struct {
-	Type          string `json:"type,omitempty"`
-	Title         string `json:"title,omitempty"`
-	Body          string `json:"body,omitempty"`
-	Hidden        bool   `json:"hidden"`
-	CategorySlug  string `json:"categorySlug,omitempty"`
-	ParentDocSlug string `json:"parentDocSlug,omitempty"`
+	Slug     string `json:"slug,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Body     string `json:"body,omitempty"`
+	Category string `json:"category,omitempty"`
+	Parent   string `json:"parent,omitempty"`
+}
+
+type ReadmeIoPageContent struct {
+	Body string `json:"body,omitempty"`
 }
 
 type ReadmeIoPageUpdate struct {
-	Type          string `json:"type,omitempty"`
-	Title         string `json:"title,omitempty"`
-	Body          string `json:"body,omitempty"`
-	CategorySlug  string `json:"categorySlug,omitempty"`
-	ParentDocSlug string `json:"parentDocSlug,omitempty"`
+	Title   string               `json:"title,omitempty"`
+	Content *ReadmeIoPageContent `json:"content,omitempty"`
+}
+
+// Reference types for create payloads that expect objects with a URI
+type ReadmeIoReference struct {
+	URI string `json:"uri,omitempty"`
+}
+
+type ReadmeIoPageCreate struct {
+	Slug     string             `json:"slug,omitempty"`
+	Title    string             `json:"title,omitempty"`
+	Category *ReadmeIoReference `json:"category,omitempty"`
+	Parent   *ReadmeIoReference `json:"parent,omitempty"`
 }
 
 type Pages struct {
@@ -143,32 +158,42 @@ func main() {
 
 	sourceFile := os.Getenv("COLLECTION_SOURCE_FILE")
 	if sourceFile == "" {
-		panic(fmt.Sprintf("Error: COLLECTION_SOURCE_FILE is required"))
+		panic("Error: COLLECTION_SOURCE_FILE is required")
 	}
 	file, err := os.ReadFile(sourceFile)
 	if err != nil {
-		panic(fmt.Sprintf("Error reading Postman collection:", err))
+		panic(fmt.Sprintf("Error reading Postman collection: %s", err))
 	}
 
 	configuration.Pages.MarkdownFolder = os.Getenv("MARKDOWN_FOLDER")
 	if configuration.Pages.MarkdownFolder == "" {
-		panic(fmt.Sprintf("Error: MARKDOWN_FOLDER is required"))
+		panic("Error: MARKDOWN_FOLDER is required")
 	}
 	// Create docs directory if not exists
 	err = os.MkdirAll(configuration.Pages.MarkdownFolder, os.ModePerm)
 	if err != nil {
-		panic(fmt.Sprintf("Error creating docs directory:", err))
+		panic(fmt.Sprintf("Error creating docs directory: %s", err))
 	}
 
-	configuration.PageSlug = os.Getenv("README_API_PAGES_SLUG")
-	if configuration.PageSlug == "" {
-		panic(fmt.Sprintf("Error: README_API_PAGES_SLUG is required"))
+	configuration.Section = os.Getenv("README_API_SECTION")
+	if configuration.Section == "" {
+		panic("Error: README_API_SECTION is required")
 	}
+	configuration.Section = strings.ToLower(strings.TrimSpace(configuration.Section))
+	if configuration.Section != "reference" && configuration.Section != "guides" {
+		panic("Error: README_API_SECTION must be 'reference' or 'guides'")
+	}
+
+	configuration.Title = os.Getenv("README_API_CATEGORY_TITLE")
+	if configuration.Title == "" {
+		panic("Error: README_API_CATEGORY_TITLE is required")
+	}
+
 	configuration.BaseURL = os.Getenv("COLLECTION_BASE_URL")
 
 	configuration.Prefix = os.Getenv("README_API_PREFIX")
 	if configuration.Prefix == "" {
-		panic(fmt.Sprintf("Error: README_API_PREFIX is required"))
+		panic("Error: README_API_PREFIX is required")
 	}
 
 	var postmanCollection struct {
@@ -177,7 +202,7 @@ func main() {
 
 	err = json.Unmarshal(file, &postmanCollection)
 	if err != nil {
-		panic(fmt.Sprintf("Error unmarshalling Postman collection:", err))
+		panic(fmt.Sprintf("Error unmarshalling Postman collection: %s", err))
 	}
 
 	// Generate markdown pages
@@ -195,14 +220,16 @@ func main() {
 		fmt.Println("Markdown generated. Publish process stopped: README_API_KEY is empty")
 		return
 	}
-	configuration.CategorySlug = os.Getenv("README_API_CATEGORY_SLUG")
-	if configuration.CategorySlug == "" {
-		fmt.Println("Markdown generated. Publish process stopped: README_API_CATEGORY_SLUG is empty")
+	configuration.Branch = os.Getenv("README_API_BRANCH")
+	if configuration.Branch == "" {
+		fmt.Println("Markdown generated. Publish process stopped: README_API_BRANCH is empty")
 		return
 	}
-	configuration.Version = os.Getenv("README_API_VERSION")
-	if configuration.Version == "" {
-		fmt.Println("Markdown generated. Publish process stopped: README_API_VERSION is empty")
+
+	// Resolve category URI once and reuse for all pages
+	configuration.CategoryURI = getCategoryURI(configuration.Title)
+	if configuration.CategoryURI == "" {
+		fmt.Printf("Markdown generated. Publish process stopped: category URI not found for title '%s'", configuration.Title)
 		return
 	}
 	configuration.Pages.PagesFile = os.Getenv("README_API_CREATED_PAGES_FILE")
@@ -261,7 +288,7 @@ func main() {
 	updatePagesList(configuration.Pages.PagesFile, configuration.Pages.NewPages)
 
 	if !isDeleted {
-		panic(fmt.Sprintf("Error deleting pages"))
+		panic("Error deleting pages")
 	}
 }
 
@@ -280,15 +307,14 @@ func updatePagesList(filepath string, lines []string) bool {
 	for _, line := range lines {
 		_, err := writer.WriteString(line + "\n")
 		if err != nil {
-			panic(fmt.Sprintf("Error writing to file:", err))
-			return true
+			panic(fmt.Sprintf("Error writing to file: %v", err))
 		}
 	}
 
 	// Flush the writer to ensure all data is written to the file
 	err = writer.Flush()
 	if err != nil {
-		panic(fmt.Sprintf("Error flushing writer:", err))
+		panic(fmt.Sprintf("Error flushing writer: %v", err))
 	}
 	return false
 }
@@ -296,8 +322,7 @@ func updatePagesList(filepath string, lines []string) bool {
 func loadPreviouslyCreatedPages(file string) []string {
 	createdPagesFile, err := os.Open(file)
 	if err != nil {
-		panic(fmt.Sprintf("Error opening file:", err))
-		return nil
+		panic(fmt.Sprintf("Error opening file: %v", err))
 	}
 	defer createdPagesFile.Close()
 
@@ -330,7 +355,7 @@ func createRootPage(item Item, destinationFolder string) {
 	description := ""
 	hasContent := false
 	if item.Description != "" {
-		description = fmt.Sprintf("\n%s\n\n", cleanString(item.Description))
+		description = fmt.Sprintf("\n%s\n\n", escapePreservingFences(cleanString(item.Description)))
 		hasContent = true
 	}
 
@@ -348,7 +373,7 @@ func createRootPage(item Item, destinationFolder string) {
 			hasContent = true
 		} else {
 			subPageSlug := fmt.Sprintf("%s-%s", slug, generateSlug(subItem.Name))
-			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", subItem.Name, configuration.PageSlug, subPageSlug)
+			subFolderLink := fmt.Sprintf("[%s](/%s/%s)\n", escapeOutsideInlineCode(cleanString(subItem.Name)), configuration.Section, subPageSlug)
 			listContent += fmt.Sprintf("- %s", subFolderLink)
 			createSubPage(slug, subItem, subPageSlug, destinationFolder, "")
 			hasList = true
@@ -358,13 +383,13 @@ func createRootPage(item Item, destinationFolder string) {
 		if hasContent {
 			content += "\n***\n"
 		}
-		content += fmt.Sprintf("\n# Subsections\n")
+		content += "\n# Subsections\n"
 		content += listContent
 	}
 
 	// Write content to file
 	filename := fmt.Sprintf("%s/%s.md", destinationFolder, slug)
-	err := ioutil.WriteFile(filename, []byte(content), os.ModePerm)
+	err := os.WriteFile(filename, []byte(content), os.ModePerm)
 	if err != nil {
 		fmt.Println("Error writing file:", filename, err)
 	}
@@ -381,7 +406,7 @@ func createSubPage(parentSlug string, item Item, slug string, destinationFolder 
 
 	// Write content to file
 	filename := fmt.Sprintf("%s/%s.md", destinationFolder, slug)
-	err := ioutil.WriteFile(filename, []byte(content), os.ModePerm)
+	err := os.WriteFile(filename, []byte(content), os.ModePerm)
 	if err != nil {
 		fmt.Println("Error writing file:", filename, err)
 	}
@@ -397,7 +422,7 @@ func createSubPage(parentSlug string, item Item, slug string, destinationFolder 
 func processQuery(item Item) string {
 	content := getQueryHeader(item)
 	if item.Request.Description != "" {
-		content += fmt.Sprintf("\n%s\n", cleanString(item.Request.Description))
+		content += fmt.Sprintf("\n%s\n", escapePreservingFences(cleanString(item.Request.Description)))
 	}
 	url := getRequestURL(item.Request)
 	headers := getRequestHeaders(item.Request)
@@ -405,7 +430,7 @@ func processQuery(item Item) string {
 	responseExamples := ""
 	if len(item.Response) > 0 {
 		for _, response := range item.Response {
-			responseExamples += fmt.Sprintf("\n**Example: %s**\n", cleanString(response.Name))
+			responseExamples += fmt.Sprintf("\n**Example: %s**\n", escapeOutsideInlineCode(cleanString(response.Name)))
 			responseExamples += fmt.Sprintf("\n```json js\n// Request →%s%s\n%s\n```\n", getRequestURL(response.Request), getRequestHeaders(response.Request), cleanString(response.Request.Body.Raw))
 			responseExamples += fmt.Sprintf("\n```json js\n// Response ←\n%s\n```\n\n", cleanString(response.Body))
 		}
@@ -429,7 +454,6 @@ func getRequestHeaders(request Request) string {
 	if request.Auth.Type == "noauth" {
 		authHeaders = ""
 	}
-
 	headers := ""
 	if authHeaders != "" {
 		headers = fmt.Sprintf("\n// %s", authHeaders)
@@ -444,13 +468,13 @@ func processSubItem(item Item, level string) string {
 	} else if len(item.Item) > 0 {
 		content += getHeader(level, item)
 		if item.Description != "" {
-			content += fmt.Sprintf("\n%s\n", cleanString(item.Description))
+			content += fmt.Sprintf("\n%s\n", escapePreservingFences(cleanString(item.Description)))
 		}
 		for _, subitem := range item.Item {
 			content += processSubItem(subitem, fmt.Sprintf("%s#", level))
 		}
 	} else {
-		content += fmt.Sprintf("\n%s", item.Description)
+		content += fmt.Sprintf("\n%s", escapePreservingFences(cleanString(item.Description)))
 	}
 	return content
 }
@@ -460,7 +484,7 @@ func upsertPage(parentSlug string, slug string, title string, content string) {
 	pageExists := checkPageExists(slug)
 	if pageExists {
 		fmt.Printf("Update the page %s\n", slug)
-		updatePage(parentSlug, slug, title, content)
+		updatePage(slug, title, content)
 	} else {
 		fmt.Printf("Create the page %s\n", slug)
 		createPage(parentSlug, slug, title, content)
@@ -469,74 +493,116 @@ func upsertPage(parentSlug string, slug string, title string, content string) {
 
 func checkPageExists(slug string) bool {
 	resp := sendRequest("GET", slug, nil)
-	return resp.StatusCode == http.StatusOK
+	if resp == nil {
+		return false
+	}
+	ok := resp.StatusCode == http.StatusOK
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return ok
 }
 
 func createPage(parentSlug string, slug string, title string, content string) bool {
-	createdBody := ReadmeIoPage{
-		Type:          "basic",
-		Title:         slug,
-		Body:          content,
-		Hidden:        true,
-		CategorySlug:  configuration.CategorySlug,
-		ParentDocSlug: parentSlug,
+	createdBody := ReadmeIoPageCreate{
+		Slug:  slug,
+		Title: title,
+	}
+	// Add category (resolved once) if available
+	if configuration.CategoryURI != "" {
+		createdBody.Category = &ReadmeIoReference{URI: configuration.CategoryURI}
+	}
+	// Add parent if provided
+	if strings.TrimSpace(parentSlug) != "" {
+		createdBody.Parent = &ReadmeIoReference{URI: buildParentURI(parentSlug)}
 	}
 	createdBodyJSON, err := json.Marshal(createdBody)
 	if err != nil {
 		panic(fmt.Sprintf("Error marshalling JSON: %s", err))
 	}
 	resp := sendRequest("POST", "", bytes.NewBuffer(createdBodyJSON))
-	if resp.StatusCode != http.StatusCreated {
-		panic(fmt.Sprintf("Error creating page: %s (%s)\n", slug, resp.Status))
+	if resp == nil {
+		panic(fmt.Sprintf("Error creating page: %s (no response)", slug))
 	}
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		panic(fmt.Sprintf("Error creating page: %s (%s) - %s\n", slug, resp.Status, string(bodyBytes)))
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 
-	updatedBody := ReadmeIoPage{
-		Title:  title,
-		Body:   content,
-		Hidden: false,
+	updatedBody := ReadmeIoPageUpdate{
+		Title: title,
+		Content: &ReadmeIoPageContent{
+			Body: content,
+		},
 	}
 	bodyJSON, err := json.Marshal(updatedBody)
 	if err != nil {
 		panic(fmt.Sprintf("Error marshalling JSON: %s", err))
 	}
-	resp = sendRequest("PUT", slug, bytes.NewBuffer(bodyJSON))
-	return resp.StatusCode == http.StatusOK
+	resp = sendRequest("PATCH", slug, bytes.NewBuffer(bodyJSON))
+	if resp == nil {
+		return false
+	}
+	ok := resp.StatusCode == http.StatusOK
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return ok
 }
 
-func updatePage(parentSlug string, slug string, title string, content string) bool {
+func buildParentURI(parentSlug string) string {
+	// Build a URI that points to the parent page within the current branch and section (leading slash to match API URIs)
+	return fmt.Sprintf("/branches/%s/%s/%s", configuration.Branch, configuration.Section, parentSlug)
+}
+
+func updatePage(slug string, title string, content string) bool {
 	updatedBody := ReadmeIoPageUpdate{
-		Title:         title,
-		Body:          content,
-		CategorySlug:  configuration.CategorySlug,
-		ParentDocSlug: parentSlug,
+		Title: title,
+		Content: &ReadmeIoPageContent{
+			Body: content,
+		},
 	}
 	bodyJSON, err := json.Marshal(updatedBody)
 	if err != nil {
 		panic(fmt.Sprintf("Error marshalling JSON: %s", err))
 	}
-	resp := sendRequest("PUT", slug, bytes.NewBuffer(bodyJSON))
-	return resp.StatusCode == http.StatusOK
+	resp := sendRequest("PATCH", slug, bytes.NewBuffer(bodyJSON))
+	if resp == nil {
+		return false
+	}
+	ok := resp.StatusCode == http.StatusOK
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return ok
 }
 
 func deletePage(slug string) bool {
 	resp := sendRequest("DELETE", slug, nil)
-	return resp.StatusCode == http.StatusNoContent
+	if resp == nil {
+		return false
+	}
+	ok := resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return ok
 }
 
 func sendRequest(method string, endpoint string, body io.Reader) *http.Response {
+	var pathSuffix string
 	if endpoint == "" {
-		endpoint = ""
+		pathSuffix = ""
 	} else {
-		endpoint = "/" + endpoint
+		pathSuffix = "/" + endpoint
 	}
-	req, err := http.NewRequest(method, fmt.Sprintf("%s/docs/%s", configuration.Endpoint, endpoint), body)
+	url := fmt.Sprintf("%s/branches/%s/%s%s", configuration.Endpoint, configuration.Branch, configuration.Section, pathSuffix)
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return nil
 	}
-	req.Header.Set("authorization", fmt.Sprintf("Basic %s", configuration.ApiKey))
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", configuration.ApiKey))
 	req.Header.Set("content-type", "application/json")
-	req.Header.Set("x-readme-version", configuration.Version)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -544,9 +610,46 @@ func sendRequest(method string, endpoint string, body io.Reader) *http.Response 
 		fmt.Println("Error making request:", err)
 		return nil
 	}
+	return resp
+}
+
+func getCategoryURI(title string) string {
+	encodedTitle := url.PathEscape(strings.TrimSpace(title))
+	fullURL := fmt.Sprintf("%s/branches/%s/categories/%s/%s", configuration.Endpoint, configuration.Branch, configuration.Section, encodedTitle)
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("authorization", fmt.Sprintf("Bearer %s", configuration.ApiKey))
+	req.Header.Set("content-type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
 	defer resp.Body.Close()
 
-	return resp
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+
+	// The API wraps the payload under a top-level "data" object
+	var payload struct {
+		Data struct {
+			URI string `json:"uri"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &payload); err == nil && payload.Data.URI != "" {
+		return payload.Data.URI
+	}
+	return ""
 }
 
 func generateSlug(str string) string {
@@ -558,14 +661,57 @@ func cleanString(str string) string {
 	return strings.Trim(str, " \n\t")
 }
 
+// escapeMarkdown converts characters like <, >, & and " to HTML entities
+// to prevent them from being interpreted as HTML in markdown rendering.
+// Do NOT use this for content inside fenced code blocks.
+func escapeMarkdown(str string) string {
+	return html.EscapeString(str)
+}
+
+// escapeOutsideInlineCode escapes only the parts of a string that are
+// outside inline code spans delimited by backticks (`...`).
+func escapeOutsideInlineCode(line string) string {
+	if line == "" {
+		return line
+	}
+	parts := strings.Split(line, "`")
+	for idx := 0; idx < len(parts); idx++ {
+		if idx%2 == 0 { // outside inline code
+			parts[idx] = html.EscapeString(parts[idx])
+		}
+	}
+	return strings.Join(parts, "`")
+}
+
+// escapePreservingFences escapes only outside of fenced code blocks (``` ... ```)
+// and also preserves inline code spans using escapeOutsideInlineCode.
+func escapePreservingFences(s string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	inFence := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if !inFence {
+			lines[i] = escapeOutsideInlineCode(line)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func getQueryHeader(item Item) string {
-	return fmt.Sprintf("**%s**\n", cleanString(item.Name))
+	return fmt.Sprintf("**%s**\n", escapeMarkdown(cleanString(item.Name)))
 }
 
 func getHeader(level string, item Item) string {
 	content := ""
 	if level != "" {
-		content += fmt.Sprintf("%s %s\n", level, cleanString(item.Name))
+		content += fmt.Sprintf("%s %s\n", level, escapeMarkdown(cleanString(item.Name)))
 	}
 
 	return content
