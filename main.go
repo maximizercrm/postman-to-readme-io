@@ -229,7 +229,7 @@ func main() {
 	// Resolve category URI once and reuse for all pages
 	configuration.CategoryURI = getCategoryURI(configuration.Title)
 	if configuration.CategoryURI == "" {
-		fmt.Printf("Markdown generated. Publish process stopped: category URI not found for title '%s'", configuration.Title)
+		fmt.Printf("Markdown generated. Publish process stopped: category URI not found for title '%s'\n", configuration.Title)
 		return
 	}
 	configuration.Pages.PagesFile = os.Getenv("README_API_CREATED_PAGES_FILE")
@@ -616,6 +616,7 @@ func sendRequest(method string, endpoint string, body io.Reader) *http.Response 
 func getCategoryURI(title string) string {
 	encodedTitle := url.PathEscape(strings.TrimSpace(title))
 	fullURL := fmt.Sprintf("%s/branches/%s/categories/%s/%s", configuration.Endpoint, configuration.Branch, configuration.Section, encodedTitle)
+	fmt.Printf("Reading category URI in '%s'\n", fullURL)
 
 	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
